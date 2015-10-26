@@ -11,8 +11,7 @@ Usage Example:
 
     filepath = "/tmp/square.jpg"
     insta = InstagramSession(USERNAME, PASSWORD)
-    if insta.login(USERNAME, PASSWORD):
-        insta.upload_photo(filepath, "hello Instagram")
+    insta.upload_photo(filepath, "hello Instagram")
         
 Note that photos must be square to be uploaded. You can convert your
 photo using ImageMagick with this command:
