@@ -14,43 +14,15 @@ except:
     # python 3
     urllib_quote_plus = urllib.parse.quote_plus
 
-def _generate_signature(data):
-    return hmac.new('b4a23f5e39b5929e0666ac5de94c89d1618a2916'.encode('utf-8'), data.encode('utf-8'), hashlib.sha256).hexdigest()
-
-
-def _generate_user_agent():
-    resolutions = ['720x1280', '320x480', '480x800', '1024x768', '1280x720', '768x1024', '480x320']
-    versions = ['GT-N7000', 'SM-N9000', 'GT-I9220', 'GT-I9100']
-    dpis = ['120', '160', '320', '240']
-
-    ver = random.choice(versions)
-    dpi = random.choice(dpis)
-    res = random.choice(resolutions)
-
-    return (
-        'Instagram 4.{}.{} '
-        'Android ({}/{}.{}.{}; {}; {}; samsung; {}; {}; smdkc210; en_US)'
-    ).format(
-        random.randint(1, 2),
-        random.randint(0, 2),
-        random.randint(10, 11),
-        random.randint(1, 3),
-        random.randint(3, 5),
-        random.randint(0, 5),
-        dpi,
-        res,
-        ver,
-        ver,
-    )
-
-
 class InstagramSession(object):
 
-    def __init__(self):
-        self.guid = str(uuid.uuid1())
-        self.device_id = 'android-{}'.format(self.guid)
+    def __init__(self, username=None, password=None, guid=None, device_id=None, user_agent=None):
+        self.guid = guid or str(uuid.uuid1())
+        self.device_id = device_id or 'android-{}'.format(self.guid)
         self.session = requests.Session()
-        self.session.headers.update({'User-Agent': _generate_user_agent()})
+        self.session.headers.update({'User-Agent': user_agent or self._generate_user_agent()})
+        self.username = username
+        self.password = password
 
     def login(self, username, password):
 
@@ -61,9 +33,8 @@ class InstagramSession(object):
             "password": password,
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
         })
-        print(data)
-
-        sig = _generate_signature(data)
+        
+        sig = self._generate_signature(data)
 
         payload = 'signed_body={}.{}&ig_sig_key_version=4'.format(
             sig,
@@ -72,26 +43,30 @@ class InstagramSession(object):
 
         r = self.session.post("https://instagram.com/api/v1/accounts/login/", payload)
         r_json = r.json()
-        print(r_json)
 
         if r_json.get('status') != "ok":
             return False
 
         return True
 
-    def upload_photo(self, filename):
-        data = {
-            "device_timestamp": time.time(),
-        }
-        files = {
-            "photo": open(filename, 'rb'),
-        }
+    def upload_photo(self, filename, caption):
+        if self.login(self.username, self.password):
+            data = {
+                "device_timestamp": time.time(),
+            }
+            files = {
+                "photo": open(filename, 'rb'),
+            }
 
-        r = self.session.post("https://instagram.com/api/v1/media/upload/", data, files=files)
-        r_json = r.json()
-        print(r_json)
-
-        return r_json.get('media_id')
+            r = self.session.post("https://instagram.com/api/v1/media/upload/", data, files=files)
+ 
+            if r.status_code == 200:
+                r_json = r.json()
+                media_id=r_json.get('media_id')
+                if media_id:
+                    return self.configure_photo(media_id, caption)
+        else:
+            raise ValueError('Invalid username & password')
 
     def configure_photo(self, media_id, caption):
         data = json.dumps({
@@ -105,9 +80,8 @@ class InstagramSession(object):
             "extra": "{}",
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"
         })
-        print(data)
 
-        sig = _generate_signature(data)
+        sig = self._generate_signature(data)
 
         payload = 'signed_body={}.{}&ig_sig_key_version=4'.format(
             sig,
@@ -116,11 +90,36 @@ class InstagramSession(object):
 
         r = self.session.post("https://instagram.com/api/v1/media/configure/", payload)
         r_json = r.json()
-        print(r_json)
 
         if r_json.get('status') != "ok":
             return False
 
         return True
 
+    def _generate_signature(self, data):
+        return hmac.new('b4a23f5e39b5929e0666ac5de94c89d1618a2916'.encode('utf-8'), data.encode('utf-8'), hashlib.sha256).hexdigest()
 
+    def _generate_user_agent(self):
+        resolutions = ['720x1280', '320x480', '480x800', '1024x768', '1280x720', '768x1024', '480x320']
+        versions = ['GT-N7000', 'SM-N9000', 'GT-I9220', 'GT-I9100']
+        dpis = ['120', '160', '320', '240']
+
+        ver = random.choice(versions)
+        dpi = random.choice(dpis)
+        res = random.choice(resolutions)
+
+        return (
+            'Instagram 4.{}.{} '
+            'Android ({}/{}.{}.{}; {}; {}; samsung; {}; {}; smdkc210; en_US)'
+        ).format(
+        random.randint(1, 2),
+        random.randint(0, 2),
+        random.randint(10, 11),
+        random.randint(1, 3),
+        random.randint(3, 5),
+        random.randint(0, 5),
+        dpi,
+        res,
+        ver,
+        ver,
+    )
